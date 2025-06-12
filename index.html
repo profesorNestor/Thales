@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- 
+    /*******************************************/
+    /* CONFIGURACIÓN Y METADATOS DEL JUEGO    */
+    /*******************************************/
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thales: El Desafío de la Proporción</title>
+
+    <!-- Fuentes de Google Fonts para un look más técnico y limpio -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Librerías externas: p5.js para dibujar y MathJax para fórmulas matemáticas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <!-- 
+    /*******************************************/
+    /* ESTILOS CSS - LA MAGIA VISUAL       */
+    /* Aquí definimos el look de "blueprint"     */
+    /*******************************************/
+    -->
+    <style>
+        :root {
+            --bg-color: #0f172a; /* Azul oscuro, como un plano */
+            --surface-color: #1e293b; /* Superficie ligeramente más clara */
+            --primary-color: #38bdf8; /* Cian brillante para elementos clave */
+            --text-color: #e2e8f0; /* Texto color hueso */
+            --correct-color: #4ade80; /* Verde para respuestas correctas */
+            --incorrect-color: #f87171; /* Rojo para respuestas incorrectas */
+            --shadow: rgba(0, 0, 0, 0.4);
+        }
+
+        body {
+            font-family: 'Lato', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                linear-gradient(rgba(56, 189, 248, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56, 189, 248, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        /* --- Contenedor Principal --- */
+        .game-container {
+            width: 100%;
+            max-width: 600px;
+            background-color: var(--surface-color);
+            border: 2px solid var(--primary-color);
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+            overflow: hidden;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .screen { display: none; padding: 30px; }
+        .screen.active { display: block; }
+
+        h1, h2 { font-family: 'Roboto Mono', monospace; color: var(--primary-color); }
+        h1 { font-size: 2.5rem; }
+        h2 { font-size: 1.5rem; }
+
+        /* --- Pantalla de Inicio --- */
+        #start-screen .thales-icon {
+            font-size: 4rem;
+            margin: 20px;
+            display: inline-block;
+            transform: rotate(-15deg);
+        }
+
+        /* --- Pantalla de Juego --- */
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 1.2rem;
+        }
+        #lives { color: var(--incorrect-color); }
+        #score { color: var(--correct-color); }
+
+        /* Contenedor para el lienzo de p5.js */
+        #canvas-container {
+            margin: 20px auto;
+            border: 2px dashed var(--primary-color);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+            height: 250px;
+            overflow: hidden;
+        }
+        
+        #question-text {
+            min-height: 50px;
+        }
+
+        #answer-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            background-color: transparent;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 1.2rem;
+            font-family: 'Roboto Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn:hover:not(:disabled) { background-color: rgba(56, 189, 248, 0.1); transform: translateY(-3px); }
+        .btn.correct { background-color: var(--correct-color); border-color: var(--correct-color); color: var(--bg-color); font-weight: bold; }
+        .btn.incorrect { background-color: var(--incorrect-color); border-color: var(--incorrect-color); color: var(--bg-color); font-weight: bold; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- Pantalla Final --- */
+        #final-stats { font-size: 1.2rem; line-height: 1.8; text-align: left; max-width: 300px; margin: 20px auto; }
+        #final-stats strong { color: var(--primary-color); }
+        
+        /* --- Modal de Retroalimentación --- */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(15, 23, 42, 0.8);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .modal.show { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background-color: var(--surface-color);
+            padding: 30px; border-radius: 10px; text-align: center;
+            border: 2px solid var(--primary-color);
+            width: 90%; max-width: 500px;
+            transform: scale(0.9); transition: transform 0.3s ease;
+        }
+        .modal.show .modal-content { transform: scale(1); }
+        #modal-feedback-text { font-size: 1.1rem; line-height: 1.6; margin-top: 15px; color: var(--text-color); }
+        
+        @media (max-width: 600px) {
+            h1 { font-size: 2rem; }
+            #answer-buttons { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 
+    /*******************************************/
+    /* ESTRUCTURA HTML DEL JUEGO           */
+    /*******************************************/
+    -->
+    <div class="game-container">
+        <!-- Pantalla de Inicio -->
+        <div id="start-screen" class="screen active">
+            <h1>Teorema de Thales</h1>
+            <div class="thales-icon">📐</div>
+            <h2>El Desafío de la Proporción</h2>
+            <p>Calcula los segmentos desconocidos usando el poder de las líneas paralelas.</p>
+            <button class="btn" id="start-btn" style="width: 80%; margin-top: 20px;">¡Comenzar!</button>
+        </div>
+
+        <!-- Pantalla de Juego -->
+        <div id="game-screen" class="screen">
+            <div class="hud">
+                <div id="question-counter"></div>
+                <div id="score"></div>
+                <div id="lives"></div>
+            </div>
+            <h2 id="question-text">Calcula el valor de 'x'</h2>
+            <div id="canvas-container"></div>
+            <div id="answer-buttons"></div>
+        </div>
+
+        <!-- Pantalla Final -->
+        <div id="end-screen" class="screen">
+            <h2 id="end-title"></h2>
+            <div id="final-stats">
+                <p>📊 Estadísticas Finales:</p>
+                <p>Puntaje: <strong id="final-score"></strong></p>
+                <p>Correctas: <strong id="correct-answers"></strong> ✅</p>
+                <p>Incorrectas: <strong id="incorrect-answers"></strong> ❌</p>
+                <p>Calificación (0-5): <strong id="final-grade"></strong> 🎓</p>
+            </div>
+            <button class="btn" id="restart-btn">Jugar de Nuevo</button>
+        </div>
+    </div>
+    
+    <!-- Ventana Modal de Retroalimentación -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-header"></h2>
+            <div id="modal-feedback-text"></div>
+        </div>
+    </div>
+
+    <!-- 
+    /*******************************************/
+    /* LÓGICA JAVASCRIPT DEL JUEGO        */
+    /* ¡Aquí reside el cerebro y el motor!      */
+    /*******************************************/
+    -->
+    <script>
+        //=========================================
+        // BANCO DE PREGUNTAS Y PROBLEMAS
+        //=========================================
+        const problems = [
+            // Tipo 'parallels': Líneas Paralelas Clásico
+            { type: 'parallels', params: { segs1: [3, 5], segs2: [6, 'x'] }, answer: 10, explanation: "Aplicamos la proporción: $$\\frac{AB}{BC} = \\frac{DE}{EF} \\implies \\frac{3}{5} = \\frac{6}{x} \\implies 3x = 30 \\implies x = 10$$" },
+            { type: 'parallels', params: { segs1: [4, 'x'], segs2: [8, 12] }, answer: 6, explanation: "La proporción es: $$\\frac{AB}{BC} = \\frac{DE}{EF} \\implies \\frac{4}{x} = \\frac{8}{12} \\implies 8x = 48 \\implies x = 6$$" },
+            { type: 'parallels', params: { segs1: ['x', 9], segs2: [4, 6] }, answer: 6, explanation: "Establecemos la igualdad: $$\\frac{AB}{BC} = \\frac{DE}{EF} \\implies \\frac{x}{9} = \\frac{4}{6} \\implies 6x = 36 \\implies x = 6$$" },
+
+            // Tipo 'triangles': Triángulos Rectángulos Semejantes
+            { type: 'triangles', params: { AB: 8, AC: 12, DE: 'x', DC: 6 }, answer: 4, explanation: "Por semejanza de triángulos (ΔABC ~ ΔDEC): $$\\frac{AB}{DE} = \\frac{AC}{DC} \\implies \\frac{8}{x} = \\frac{12}{6} \\implies 12x = 48 \\implies x = 4$$" },
+            { type: 'triangles', params: { AB: 'x', AC: 15, DE: 6, DC: 10 }, answer: 9, explanation: "Por semejanza de triángulos: $$\\frac{AB}{DE} = \\frac{AC}{DC} \\implies \\frac{x}{6} = \\frac{15}{10} \\implies 10x = 90 \\implies x = 9$$" },
+            { type: 'triangles', params: { AB: 10, AC: 'x', DE: 5, DC: 4 }, answer: 8, explanation: "Por semejanza de triángulos: $$\\frac{AB}{DE} = \\frac{AC}{DC} \\implies \\frac{10}{5} = \\frac{x}{4} \\implies 5x = 40 \\implies x = 8$$" },
+           
+            // Tipo 'hourglass': Triángulos Opuestos por el Vértice (Pajarita)
+            { type: 'hourglass', params: { AB: 6, BC: 5, CD: 10, DE: 'x' }, answer: 12, explanation: "Por semejanza (ΔABC ~ ΔEDC): $$\\frac{AB}{ED} = \\frac{BC}{DC} \\implies \\frac{6}{x} = \\frac{5}{10} \\implies 5x = 60 \\implies x = 12$$" },
+            { type: 'hourglass', params: { AB: 4, BC: 6, CD: 'x', DE: 10 }, answer: 15, explanation: "Por semejanza: $$\\frac{AB}{ED} = \\frac{BC}{DC} \\implies \\frac{4}{10} = \\frac{6}{x} \\implies 4x = 60 \\implies x = 15$$" },
+            { type: 'hourglass', params: { AB: 'x', BC: 8, CD: 12, DE: 9 }, answer: 6, explanation: "Por semejanza: $$\\frac{AB}{ED} = \\frac{BC}{DC} \\implies \\frac{x}{9} = \\frac{8}{12} \\implies 12x = 72 \\implies x = 6$$" },
+
+            // Tipo 'embedded_triangle': Triángulo Anidado
+            { type: 'embedded_triangle', params: { AB: 15, CA: 12, CD: 4, DE: 'x' }, answer: 5, explanation: "Por semejanza (ΔCDE ~ ΔCAB): $$\\frac{DE}{AB} = \\frac{CD}{CA} \\implies \\frac{x}{15} = \\frac{4}{12} \\implies 12x = 60 \\implies x = 5$$" },
+            { type: 'embedded_triangle', params: { AB: 20, CA: 15, CD: 'x', DE: 8 }, answer: 6, explanation: "Por semejanza: $$\\frac{DE}{AB} = \\frac{CD}{CA} \\implies \\frac{8}{20} = \\frac{x}{15} \\implies 20x = 120 \\implies x = 6$$" },
+            { type: 'embedded_triangle', params: { AB: 'x', CA: 25, CD: 10, DE: 10 }, answer: 25, explanation: "Por semejanza: $$\\frac{DE}{AB} = \\frac{CD}{CA} \\implies \\frac{10}{x} = \\frac{10}{25} \\implies 10x = 250 \\implies x = 25$$" }
+        ];
+
+        //=========================================
+        // ELEMENTOS DEL DOM Y VARIABLES GLOBALES
+        //=========================================
+        const dom = {
+            startScreen: document.getElementById('start-screen'),
+            gameScreen: document.getElementById('game-screen'),
+            endScreen: document.getElementById('end-screen'),
+            startBtn: document.getElementById('start-btn'),
+            restartBtn: document.getElementById('restart-btn'),
+            questionCounter: document.getElementById('question-counter'),
+            score: document.getElementById('score'),
+            lives: document.getElementById('lives'),
+            canvasContainer: document.getElementById('canvas-container'),
+            answerButtons: document.getElementById('answer-buttons'),
+            modal: document.getElementById('feedback-modal'),
+            modalHeader: document.getElementById('modal-header'),
+            modalFeedbackText: document.getElementById('modal-feedback-text'),
+        };
+
+        let state = {
+            shuffledProblems: [],
+            currentIndex: 0,
+            score: 0,
+            lives: 3,
+            p5Instance: null,
+        };
+
+        //=========================================
+        // LÓGICA DE P5.JS PARA DIBUJAR
+        //=========================================
+        const sketch = (p) => {
+            let currentProblem = null;
+
+            p.setup = () => {
+                const canvas = p.createCanvas(dom.canvasContainer.offsetWidth, dom.canvasContainer.offsetHeight);
+                canvas.parent(dom.canvasContainer);
+                p.noLoop();
+                showNextProblem(p);
+            };
+
+            p.draw = () => {
+                p.background('#1e293b');
+                if (currentProblem) {
+                    drawProblemFigure(p, currentProblem);
+                }
+            };
+            
+            p.updateWithNewProblem = (problem) => {
+                currentProblem = problem;
+                p.redraw();
+            };
+
+            function drawProblemFigure(p, problem) {
+                switch (problem.type) {
+                    case 'parallels':
+                        drawParallelFigure(p, problem.params);
+                        break;
+                    case 'triangles':
+                        drawTriangleFigure(p, problem.params);
+                        break;
+                    case 'hourglass':
+                        drawHourglassFigure(p, problem.params);
+                        break;
+                    case 'embedded_triangle':
+                        drawEmbeddedTriangleFigure(p, problem.params);
+                        break;
+                }
+            }
+
+            function drawText(p, str, x, y, color = '#fde047', size = 18) {
+                 p.push();
+                 p.noStroke();
+                 p.fill(color);
+                 p.textSize(size);
+                 p.textAlign(p.CENTER, p.CENTER);
+                 p.text(str, x, y);
+                 p.pop();
+            }
+
+            function drawParallelFigure(p, params) {
+                p.fill('#e2e8f0');
+                p.textFont('Roboto Mono');
+                const w = p.width;
+                const h = p.height;
+                p.stroke('#eab308');
+                p.strokeWeight(3);
+                p.line(w * 0.1, h * 0.2, w * 0.9, h * 0.2);
+                p.line(w * 0.1, h * 0.5, w * 0.9, h * 0.5);
+                p.line(w * 0.1, h * 0.8, w * 0.9, h * 0.8);
+                const t1 = { x1: w * 0.3, y1: h * 0.1, x2: w * 0.45, y2: h * 0.9 };
+                const t2 = { x1: w * 0.7, y1: h * 0.1, x2: w * 0.8, y2: h * 0.9 };
+                const v = {
+                    A: { x: p.map(h * 0.2, t1.y1, t1.y2, t1.x1, t1.x2), y: h * 0.2 }, B: { x: p.map(h * 0.5, t1.y1, t1.y2, t1.x1, t1.x2), y: h * 0.5 },
+                    C: { x: p.map(h * 0.8, t1.y1, t1.y2, t1.x1, t1.x2), y: h * 0.8 }, D: { x: p.map(h * 0.2, t2.y1, t2.y2, t2.x1, t2.x2), y: h * 0.2 },
+                    E: { x: p.map(h * 0.5, t2.y1, t2.y2, t2.x1, t2.x2), y: h * 0.5 }, F: { x: p.map(h * 0.8, t2.y1, t2.y2, t2.x1, t2.x2), y: h * 0.8 },
+                };
+                p.strokeWeight(4);
+                p.stroke('#ec4899'); p.line(t1.x1, t1.y1, t1.x2, t1.y2);
+                p.stroke('#ef4444'); p.line(t2.x1, t2.y1, t2.x2, t2.y2);
+                p.strokeWeight(1.5); p.stroke('#0f172a'); p.fill('#38bdf8');
+                for (const key in v) { p.circle(v[key].x, v[key].y, 12); }
+                
+                drawText(p, 'A', v.A.x - 20, v.A.y, '#e2e8f0', 16); drawText(p, 'B', v.B.x - 20, v.B.y, '#e2e8f0', 16); drawText(p, 'C', v.C.x - 20, v.C.y, '#e2e8f0', 16);
+                drawText(p, 'D', v.D.x + 20, v.D.y, '#e2e8f0', 16); drawText(p, 'E', v.E.x + 20, v.E.y, '#e2e8f0', 16); drawText(p, 'F', v.F.x + 20, v.F.y, '#e2e8f0', 16);
+                
+                drawText(p, params.segs1[0], (v.A.x + v.B.x) / 2 - 35, (v.A.y + v.B.y) / 2);
+                drawText(p, params.segs1[1], (v.B.x + v.C.x) / 2 - 35, (v.B.y + v.C.y) / 2);
+                drawText(p, params.segs2[0], (v.D.x + v.E.x) / 2 + 35, (v.D.y + v.E.y) / 2);
+                drawText(p, params.segs2[1], (v.E.x + v.F.x) / 2 + 35, (v.E.y + v.F.y) / 2);
+            }
+
+            function drawTriangleFigure(p, params) {
+                const w = p.width;
+                const h = p.height;
+                const v = {
+                    C: { x: w * 0.85, y: h * 0.8 }, B: { x: w * 0.15, y: h * 0.15 },
+                    A: { x: w * 0.15, y: h * 0.8 },
+                };
+                // Re-calculamos D y E en base a los lados del triángulo grande.
+                const totalLengthAC = params.AC === 'x' ? 1 : params.AC;
+                v.D = { x: p.map(params.DC, 0, totalLengthAC, v.C.x, v.A.x), y: h * 0.8 };
+                v.E = { x: v.D.x, y: p.map(v.D.x, v.C.x, v.B.x, v.C.y, v.B.y) };
+
+                p.strokeWeight(3);
+                p.stroke('#f87171'); p.line(v.A.x, v.A.y, v.C.x, v.C.y); // AC
+                p.stroke('#ec4899'); p.line(v.A.x, v.A.y, v.B.x, v.B.y); // AB
+                p.stroke('#eab308'); p.line(v.B.x, v.B.y, v.C.x, v.C.y); // BC (Hipotenusa)
+                p.stroke('#ec4899'); p.line(v.D.x, v.D.y, v.E.x, v.E.y); // DE
+
+                p.strokeWeight(1.5); p.stroke('#0f172a'); p.fill('#38bdf8');
+                for (const key in v) { p.circle(v[key].x, v[key].y, 12); }
+
+                drawText(p, 'A', v.A.x - 15, v.A.y + 15, '#e2e8f0', 16); drawText(p, 'B', v.B.x - 15, v.B.y - 15, '#e2e8f0', 16);
+                drawText(p, 'C', v.C.x + 15, v.C.y + 15, '#e2e8f0', 16); drawText(p, 'D', v.D.x - 15, v.D.y + 15, '#e2e8f0', 16);
+                drawText(p, 'E', v.E.x + 15, v.E.y, '#e2e8f0', 16);
+
+                drawText(p, params.AB, v.A.x - 25, (v.A.y + v.B.y) / 2);
+                drawText(p, params.DE, v.D.x - 25, (v.D.y + v.E.y) / 2);
+                drawText(p, params.AC, (v.A.x + v.C.x) / 2, v.A.y + 20);
+                drawText(p, params.DC, (v.D.x + v.C.x) / 2, v.D.y + 20);
+            }
+
+            function drawHourglassFigure(p, params) {
+                const w = p.width;
+                const h = p.height;
+                const v = {
+                    C: { x: w * 0.5, y: h * 0.5 },
+                    A: { x: w * 0.2, y: h * 0.15 }, B: { x: w * 0.8, y: h * 0.15 },
+                    E: { x: w * 0.2, y: h * 0.85 }, D: { x: w * 0.8, y: h * 0.85 }
+                };
+                
+                p.strokeWeight(3);
+                p.stroke('#ef4444'); p.line(v.A.x, v.A.y, v.D.x, v.D.y);
+                p.stroke('#ec4899'); p.line(v.B.x, v.B.y, v.E.x, v.E.y);
+                p.stroke('#eab308'); p.line(v.A.x, v.A.y, v.B.x, v.B.y); // AB
+                p.stroke('#4ade80'); p.line(v.E.x, v.E.y, v.D.x, v.D.y); // ED
+
+                p.strokeWeight(1.5); p.stroke('#0f172a'); p.fill('#38bdf8');
+                for (const key in v) { p.circle(v[key].x, v[key].y, 12); }
+                
+                drawText(p, 'A', v.A.x - 15, v.A.y, '#e2e8f0', 16); drawText(p, 'B', v.B.x + 15, v.B.y, '#e2e8f0', 16);
+                drawText(p, 'C', v.C.x, v.C.y - 15, '#e2e8f0', 16); drawText(p, 'D', v.D.x + 15, v.D.y, '#e2e8f0', 16);
+                drawText(p, 'E', v.E.x - 15, v.E.y, '#e2e8f0', 16);
+                
+                drawText(p, params.AB, (v.A.x + v.B.x) / 2, v.A.y - 20);
+                drawText(p, params.DE, (v.D.x + v.E.x) / 2, v.D.y + 20);
+                drawText(p, params.BC, (v.B.x + v.C.x) / 2 + 10, (v.B.y + v.C.y) / 2);
+                drawText(p, params.CD, (v.C.x + v.D.x) / 2 + 10, (v.C.y + v.D.y) / 2);
+            }
+
+            function drawEmbeddedTriangleFigure(p, params) {
+                const w = p.width;
+                const h = p.height;
+                const v = {
+                    C: { x: w * 0.5, y: h * 0.1 },
+                    A: { x: w * 0.1, y: h * 0.9 }, B: { x: w * 0.9, y: h * 0.9 },
+                };
+                const totalLengthCA = params.CA === 'x' ? 1 : params.CA;
+                v.D = { x: p.map(params.CD, 0, totalLengthCA, v.C.x, v.A.x), y: p.map(params.CD, 0, totalLengthCA, v.C.y, v.A.y) };
+                v.E = { x: p.map(params.CD, 0, totalLengthCA, v.C.x, v.B.x), y: p.map(params.CD, 0, totalLengthCA, v.C.y, v.B.y) };
+
+                p.strokeWeight(3);
+                p.stroke('#38bdf8'); p.line(v.A.x, v.A.y, v.B.x, v.B.y); // Base AB
+                p.stroke('#ef4444'); p.line(v.A.x, v.A.y, v.C.x, v.C.y); // Lado AC
+                p.stroke('#ef4444'); p.line(v.B.x, v.B.y, v.C.x, v.C.y); // Lado BC
+                p.stroke('#eab308'); p.line(v.D.x, v.D.y, v.E.x, v.E.y); // DE paralela
+
+                p.strokeWeight(1.5); p.stroke('#0f172a'); p.fill('#38bdf8');
+                for (const key in v) { p.circle(v[key].x, v[key].y, 12); }
+
+                drawText(p, 'A', v.A.x - 15, v.A.y, '#e2e8f0', 16); drawText(p, 'B', v.B.x + 15, v.B.y, '#e2e8f0', 16);
+                drawText(p, 'C', v.C.x, v.C.y - 15, '#e2e8f0', 16); drawText(p, 'D', v.D.x - 15, v.D.y, '#e2e8f0', 16);
+                drawText(p, 'E', v.E.x + 15, v.E.y, '#e2e8f0', 16);
+                
+                drawText(p, params.AB, (v.A.x + v.B.x) / 2, v.A.y + 20);
+                drawText(p, params.DE, (v.D.x + v.E.x) / 2, v.D.y - 15);
+                drawText(p, params.CA, (v.A.x + v.C.x) / 2 - 15, (v.A.y + v.C.y) / 2);
+                drawText(p, params.CD, (v.C.x + v.D.x) / 2 - 15, (v.C.y + v.D.y) / 2);
+            }
+        };
+
+        //=========================================
+        // FUNCIONES PRINCIPALES DEL JUEGO
+        //=========================================
+        function initGame() {
+            dom.startBtn.addEventListener('click', startGame);
+            dom.restartBtn.addEventListener('click', startGame);
+        }
+
+        function startGame() {
+            state.shuffledProblems = problems.sort(() => Math.random() - 0.5);
+            state.currentIndex = 0;
+            state.score = 0;
+            state.lives = 3;
+            
+            switchScreen(dom.gameScreen);
+            
+            if (!state.p5Instance) {
+                state.p5Instance = new p5(sketch);
+            } else {
+                state.p5Instance.resizeCanvas(dom.canvasContainer.offsetWidth, dom.canvasContainer.offsetHeight);
+                showNextProblem();
+            }
+        }
+
+        function showNextProblem(p5_instance_from_setup) {
+            if (state.currentIndex >= state.shuffledProblems.length || state.lives <= 0) {
+                if (state.p5Instance || p5_instance_from_setup) endGame();
+                return;
+            }
+            resetState();
+            updateHUD();
+            const problem = state.shuffledProblems[state.currentIndex];
+            
+            const p5_to_use = p5_instance_from_setup || state.p5Instance;
+            p5_to_use.updateWithNewProblem(problem);
+            generateAnswers(problem.answer);
+        }
+        
+        function selectAnswer(e) {
+            const selectedBtn = e.target;
+            const isCorrect = selectedBtn.dataset.correct === 'true';
+            
+            Array.from(dom.answerButtons.children).forEach(button => {
+                button.disabled = true;
+                if (button.dataset.correct === 'true') button.classList.add('correct');
+            });
+            if(!isCorrect) selectedBtn.classList.add('incorrect');
+            
+            if (isCorrect) {
+                state.score += 10;
+                showFeedback(true);
+            } else {
+                state.lives--;
+                showFeedback(false);
+            }
+            
+            updateHUD();
+
+            setTimeout(() => {
+                dom.modal.classList.remove('show');
+                state.currentIndex++;
+                showNextProblem();
+            }, 3500);
+        }
+
+        function endGame() {
+            switchScreen(dom.endScreen);
+            const correctCount = state.score / 10;
+            const grade = ((correctCount / state.shuffledProblems.length) * 5).toFixed(1);
+
+            document.getElementById('end-title').innerText = grade >= 3.0 ? '¡Maestro de la Proporción!' : '¡Sigue Practicando!';
+            document.getElementById('final-score').innerText = state.score;
+            document.getElementById('correct-answers').innerText = correctCount;
+            document.getElementById('incorrect-answers').innerText = state.shuffledProblems.length - correctCount;
+            document.getElementById('final-grade').innerText = grade;
+        }
+
+        //=========================================
+        // FUNCIONES AUXILIARES
+        //=========================================
+        function updateHUD() {
+            dom.score.innerText = `Puntaje: ${state.score}`;
+            dom.lives.innerHTML = '❤️'.repeat(state.lives);
+            dom.questionCounter.innerText = `N° ${state.currentIndex + 1}/${state.shuffledProblems.length}`;
+        }
+
+        function resetState() {
+            dom.answerButtons.innerHTML = '';
+        }
+
+        function generateAnswers(correctAnswer) {
+            let answers = [correctAnswer];
+            while (answers.length < 4) {
+                let wrongAnswer;
+                if (Math.random() > 0.5) {
+                    wrongAnswer = correctAnswer + Math.ceil(Math.random() * 5);
+                } else {
+                    wrongAnswer = Math.max(1, correctAnswer - Math.ceil(Math.random() * 5));
+                }
+                if (!answers.includes(wrongAnswer)) {
+                    answers.push(wrongAnswer);
+                }
+            }
+            
+            answers.sort(() => Math.random() - 0.5);
+
+            answers.forEach(answer => {
+                const button = document.createElement('button');
+                button.innerText = answer;
+                button.classList.add('btn');
+                if (answer === correctAnswer) {
+                    button.dataset.correct = true;
+                }
+                button.addEventListener('click', selectAnswer);
+                dom.answerButtons.appendChild(button);
+            });
+        }
+        
+        function showFeedback(isCorrect) {
+            const problem = state.shuffledProblems[state.currentIndex];
+            dom.modalHeader.style.color = isCorrect ? 'var(--correct-color)' : 'var(--incorrect-color)';
+            dom.modalHeader.innerText = isCorrect ? '¡Correcto!' : '¡Incorrecto!';
+            dom.modalFeedbackText.innerHTML = `<p><strong>Explicación:</strong></p>${problem.explanation}`;
+            MathJax.typesetPromise([dom.modalFeedbackText]);
+            dom.modal.classList.add('show');
+        }
+        
+        function switchScreen(screenToShow) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            screenToShow.classList.add('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
