@@ -180,6 +180,13 @@
                 0 0 30px rgba(0, 212, 255, 0.3),
                 inset 0 0 20px rgba(0, 0, 0, 0.5);
             position: relative;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #canvas-container:active {
+            cursor: grabbing;
         }
 
         #canvas-container::before {
@@ -194,6 +201,61 @@
             background-size: 20px 20px;
             pointer-events: none;
             z-index: 1;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--accent-primary);
+            background: rgba(37, 42, 74, 0.9);
+            color: var(--accent-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.5rem;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .zoom-btn:hover {
+            background: var(--accent-primary);
+            color: var(--bg-primary);
+            transform: scale(1.1);
+        }
+
+        .controls-info {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: var(--text-secondary);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            max-width: 200px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            z-index: 10;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .controls-info:hover {
+            opacity: 1;
         }
 
         #question-text {
@@ -400,6 +462,23 @@
             #answer-buttons { grid-template-columns: 1fr; }
             .hud { grid-template-columns: 1fr; gap: 15px; text-align: center; }
             .thales-icon { font-size: 4rem; }
+            
+            .controls-info {
+                font-size: 0.8rem;
+                max-width: 150px;
+                padding: 8px;
+            }
+            
+            .zoom-controls {
+                bottom: 10px;
+                right: 10px;
+            }
+            
+            .zoom-btn {
+                width: 35px;
+                height: 35px;
+                font-size: 1.2rem;
+            }
         }
     </style>
 </head>
@@ -431,7 +510,19 @@
                 <div class="hud-item" id="lives"></div>
             </div>
             <h2 id="question-text">Encuentra el valor de la incógnita 'x'</h2>
-            <div id="canvas-container"></div>
+            <div id="canvas-container">
+                <div class="controls-info">
+                    <div>🖱️ <strong>Arrastra</strong> para mover</div>
+                    <div>🔍 <strong>Rueda</strong> para zoom</div>
+                    <div>📱 <strong>Pellizca</strong> para zoom</div>
+                    <div>⭕ <strong>Doble clic</strong> resetear</div>
+                </div>
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoom-in">+</button>
+                    <button class="zoom-btn" id="zoom-out">−</button>
+                    <button class="zoom-btn" id="zoom-reset">⌂</button>
+                </div>
+            </div>
             <div id="answer-buttons"></div>
         </div>
 
@@ -644,10 +735,19 @@
         };
 
         // ============================================
-        // LÓGICA DE P5.JS MEJORADA
+        // LÓGICA DE P5.JS MEJORADA CON ZOOM Y ARRASTRE
         // ============================================
         const sketch = (p) => {
             let currentProblem = null;
+            let camera = {
+                x: 0,
+                y: 0,
+                zoom: 1,
+                targetZoom: 1,
+                isDragging: false,
+                lastMouseX: 0,
+                lastMouseY: 0
+            };
 
             p.setup = () => {
                 const canvas = p.createCanvas(
@@ -660,6 +760,9 @@
             };
 
             p.draw = () => {
+                // Aplicar suavizado de zoom
+                camera.zoom = p.lerp(camera.zoom, camera.targetZoom, 0.1);
+                
                 // Fondo con gradiente
                 for (let i = 0; i <= p.height; i++) {
                     let inter = p.map(i, 0, p.height, 0, 1);
@@ -668,13 +771,182 @@
                     p.line(0, i, p.width, i);
                 }
                 
+                // Aplicar transformaciones de cámara
+                p.push();
+                p.translate(p.width/2, p.height/2);
+                p.scale(camera.zoom);
+                p.translate(-p.width/2 + camera.x, -p.height/2 + camera.y);
+                
                 if (currentProblem) {
                     drawProblemFigure(p, currentProblem);
                 }
+                
+                p.pop();
+                
+                // Mostrar controles de zoom
+                drawZoomControls(p);
             };
+            
+            // Eventos de mouse para arrastre
+            p.mousePressed = () => {
+                if (isMouseInCanvas(p)) {
+                    camera.isDragging = true;
+                    camera.lastMouseX = p.mouseX;
+                    camera.lastMouseY = p.mouseY;
+                    return false; // Prevenir comportamiento por defecto
+                }
+            };
+            
+            p.mouseDragged = () => {
+                if (camera.isDragging && isMouseInCanvas(p)) {
+                    let deltaX = p.mouseX - camera.lastMouseX;
+                    let deltaY = p.mouseY - camera.lastMouseY;
+                    
+                    camera.x += deltaX / camera.zoom;
+                    camera.y += deltaY / camera.zoom;
+                    
+                    camera.lastMouseX = p.mouseX;
+                    camera.lastMouseY = p.mouseY;
+                    
+                    p.redraw();
+                    return false;
+                }
+            };
+            
+            p.mouseReleased = () => {
+                camera.isDragging = false;
+            };
+            
+            // Zoom con rueda del mouse
+            p.mouseWheel = (event) => {
+                if (isMouseInCanvas(p)) {
+                    let zoomFactor = 1 + (event.delta * -0.001);
+                    camera.targetZoom = p.constrain(camera.targetZoom * zoomFactor, 0.3, 3.0);
+                    p.redraw();
+                    return false; // Prevenir scroll de página
+                }
+            };
+            
+            // Doble clic para resetear vista
+            p.doubleClicked = () => {
+                if (isMouseInCanvas(p)) {
+                    resetCamera();
+                    p.redraw();
+                    return false;
+                }
+            };
+            
+            // Touch events para móviles
+            let touches = [];
+            let lastTouchDistance = 0;
+            
+            p.touchStarted = () => {
+                if (isMouseInCanvas(p)) {
+                    touches = [...p.touches];
+                    if (touches.length === 1) {
+                        camera.isDragging = true;
+                        camera.lastMouseX = touches[0].x;
+                        camera.lastMouseY = touches[0].y;
+                    } else if (touches.length === 2) {
+                        lastTouchDistance = getTouchDistance(touches[0], touches[1]);
+                    }
+                    return false;
+                }
+            };
+            
+            p.touchMoved = () => {
+                if (isMouseInCanvas(p)) {
+                    touches = [...p.touches];
+                    
+                    if (touches.length === 1 && camera.isDragging) {
+                        // Arrastre con un dedo
+                        let deltaX = touches[0].x - camera.lastMouseX;
+                        let deltaY = touches[0].y - camera.lastMouseY;
+                        
+                        camera.x += deltaX / camera.zoom;
+                        camera.y += deltaY / camera.zoom;
+                        
+                        camera.lastMouseX = touches[0].x;
+                        camera.lastMouseY = touches[0].y;
+                        
+                        p.redraw();
+                    } else if (touches.length === 2) {
+                        // Zoom con pellizco
+                        let currentDistance = getTouchDistance(touches[0], touches[1]);
+                        let zoomFactor = currentDistance / lastTouchDistance;
+                        
+                        camera.targetZoom = p.constrain(camera.targetZoom * zoomFactor, 0.3, 3.0);
+                        lastTouchDistance = currentDistance;
+                        
+                        p.redraw();
+                    }
+                    return false;
+                }
+            };
+            
+            p.touchEnded = () => {
+                camera.isDragging = false;
+                touches = [];
+            };
+            
+            function getTouchDistance(touch1, touch2) {
+                return p.dist(touch1.x, touch1.y, touch2.x, touch2.y);
+            }
+            
+            function isMouseInCanvas(p) {
+                return p.mouseX >= 0 && p.mouseX <= p.width && p.mouseY >= 0 && p.mouseY <= p.height;
+            }
+            
+            function resetCamera() {
+                camera.x = 0;
+                camera.y = 0;
+                camera.targetZoom = 1;
+                camera.zoom = 1;
+            }
+            
+            function drawZoomControls(p) {
+                // Panel de controles semi-transparente
+                p.push();
+                p.fill(0, 0, 0, 120);
+                p.noStroke();
+                p.rect(10, 10, 200, 100, 8);
+                
+                // Texto de instrucciones
+                p.fill(255, 255, 255, 200);
+                p.textSize(12);
+                p.textAlign(p.LEFT, p.TOP);
+                p.text('🖱️ Arrastra para mover', 15, 25);
+                p.text('🔍 Rueda para zoom', 15, 40);
+                p.text('📱 Pellizca para zoom', 15, 55);
+                p.text('⭕ Doble clic: resetear', 15, 70);
+                
+                // Indicador de zoom
+                p.textAlign(p.RIGHT, p.BOTTOM);
+                p.textSize(14);
+                p.fill('#00d4ff');
+                p.text(`Zoom: ${(camera.zoom * 100).toFixed(0)}%`, p.width - 15, p.height - 15);
+                p.pop();
+            }
             
             p.updateWithNewProblem = (problem) => {
                 currentProblem = problem;
+                resetCamera(); // Resetear vista con cada nuevo problema
+                p.redraw();
+            };
+            
+            // Métodos públicos para controles externos
+            p.zoomIn = () => {
+                camera.targetZoom = p.constrain(camera.targetZoom * 1.3, 0.3, 3.0);
+                p.redraw();
+            };
+            
+            p.zoomOut = () => {
+                camera.targetZoom = p.constrain(camera.targetZoom / 1.3, 0.3, 3.0);
+                p.redraw();
+            };
+            
+            p.resetZoom = () => {
+                resetCamera();
                 p.redraw();
             };
 
@@ -957,6 +1229,25 @@
                     btn.classList.add('active');
                     state.difficulty = btn.dataset.difficulty;
                 });
+            });
+            
+            // Controles de zoom
+            document.getElementById('zoom-in')?.addEventListener('click', () => {
+                if (state.p5Instance) {
+                    state.p5Instance.zoomIn();
+                }
+            });
+            
+            document.getElementById('zoom-out')?.addEventListener('click', () => {
+                if (state.p5Instance) {
+                    state.p5Instance.zoomOut();
+                }
+            });
+            
+            document.getElementById('zoom-reset')?.addEventListener('click', () => {
+                if (state.p5Instance) {
+                    state.p5Instance.resetZoom();
+                }
             });
         }
 
